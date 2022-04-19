@@ -54,4 +54,14 @@ settings =
 		all = { "Icon.png", "Icon-*dpi.png", "Images.xcassets", },
 		android = { "LaunchScreen.storyboardc", },
 	},
+
+	window = {
+		defaultViewWidth = 640,
+		defaultViewHeight = 960,
+		resizable = true,
+		enableMaximizeButton = true,
+		titleText = {
+			default = "Rectangle's Revenge"
+		}
+	}
 }

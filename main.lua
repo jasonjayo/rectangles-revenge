@@ -5,22 +5,21 @@
 -----------------------------------------------------------------------------------------
 
 -- Your code here 
-math.randomseed( os.time() )
+math.randomseed(os.time())
 local coins = display.newGroup()
 local playerGroup = display.newGroup()
+local ui = display.newGroup()
 
 
-local physics = require( "physics" )
+local physics = require("physics")
 physics.start()
 physics.setGravity(0,0);
 -- physics.setPositionIterations( 6 )
 
 local state = { playerHealth=10 }
-local ui = display.newGroup()
+
 local titleText = display.newText({parent=ui, text="Rectangles's Revenge", x=display.contentCenterX,y=10});
-
 local healthBar = display.newText({parent=ui, text="Health: " .. state.playerHealth, x=0,y=10});
-
 
 -- DEBUG
 -- debug config options
@@ -37,7 +36,6 @@ if (debug.drawCollisionBoxes) then
 end
 
 -- PLAYER
-
 local player = display.newRect(playerGroup, display.contentCenterX, display.contentCenterY, 100, 50);
 player.fill = {255, 255, 255}
 
@@ -90,17 +88,12 @@ Runtime:addEventListener("key", onKey)
 
 -- leftButton:addEventListener("tap", onMoveLeftTap)
 
-
-
 -- ENEMIES
-
 local enemiesUi = display.newGroup()
 local indicatorsUi = display.newGroup()
 
-
-
 if (debug.drawBoundaryMarkers) then
-    display.newLine(0,0, 0,display.contentHeight);
+    display.newLine(0,0,0,display.contentHeight);
     display.newLine(display.contentWidth,0, display.contentWidth,display.contentHeight);
 end
 
@@ -130,9 +123,7 @@ local enemies = {
 
 
 local function enemyBulletCollision(enemy, e)
-    -- print("enemy colliding with " .. e.other.type)
     if (e.other.type == "bullet") then
-        print(enemy.id)
         liveEnemies[enemy.id] = nil
         enemy:removeSelf()
     end
@@ -168,7 +159,6 @@ function spawnEnemy()
     enemy.collision = enemyBulletCollision
     enemy:addEventListener("collision")
 
-
     physics.addBody(enemy, "dynamic", {density=10, friction=1, bounce=0.8, shape=enemies[shape]["vertices"]})
     -- physics.pause()
 
@@ -177,8 +167,6 @@ function spawnEnemy()
     local hypot = math.sqrt(math.pow(l, 2) + math.pow(h, 2))
 
     liveEnemies[id] = enemy
-
-
 end
 
 local direction = {x=1,y=1}
@@ -254,9 +242,7 @@ local function onPlayerCollision(player, e)
             -- player:applyForce(20, 20, player.x, player.y)
             state.playerHealth = state.playerHealth - 2
 
-            print(state.playerHealth)
         else if (e.other.type == "coin") then
-            print(coinTimers[e.other.id])
             timer.cancel(coinTimers[e.other.id])
             table.remove(coinTimers, e.other.id)
             restorePlayerHealth()
@@ -301,8 +287,6 @@ local function fireWeapon(e)
 
 end
 
-
--- updateEnemies()
 
 local function coinClick(e)
     if e.type == "down" then
@@ -350,59 +334,3 @@ timer.performWithDelay(1000, updateEnemies, 0);
 timer.performWithDelay(5000, spawnEnemy, 0);
 
 Runtime:addEventListener("mouse", fireWeapon)
-
--- local a = display.newPolygon(50, 50, enemies.pentagon.vertices);
-
--- to be worked on later
-
-
-
-
-
--- to be removed later
-
-local function polygon(sides, sideLength)
-
-    local angle = math.rad(360 / sides)
-
-
-    local a = math.round(sideLength * math.abs(math.sin(angle)))
-    local b = math.round(sideLength * math.abs(math.cos(angle)))
-
-    local prevX = 0
-    local prevY = 0
-
-    local x = 0
-    local y = 0
-
-    local vertices = {0,0}
-
-    for i = 1, sides - 2, 1 do
-
-        if ((i > sides / 4) and (i < (sides / 4) * 3)) then
-            x = prevX + b
-        else
-            x = prevX - b
-        end
-
-        if ((sides / 2 ~= i) and (sides ~= i)) then
-            if i < sides / 2 then
-                -- print("y is " .. y .. " i is " .. i .. " and subtracting from y " .. b)
-                y = prevY - a    
-            else 
-                -- print("y is " .. y .. " i is " .. i .. " and adding to y " .. b)
-                y = prevY + a
-            end
-        end
-
-        table.insert(vertices, x)
-        table.insert(vertices, y)
-
-        prevX = x
-        prevY = y
-
-    end
-
-    return vertices
-
-end
