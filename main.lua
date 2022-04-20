@@ -10,16 +10,28 @@ local coins = display.newGroup()
 local playerGroup = display.newGroup()
 local ui = display.newGroup()
 
+local beginTime = os.time()
+
 
 local physics = require("physics")
 physics.start()
 physics.setGravity(0,0);
 -- physics.setPositionIterations( 6 )
 
-local state = { playerHealth=10 }
+local state = { 
+    playerHealth=10, 
+    weapon = {
+        damage= { min=1, max=2 }
+    },
+    bullets = 10,
+    spawnRate = 2500
+}
 
 local titleText = display.newText({parent=ui, text="Rectangles's Revenge", x=display.contentCenterX,y=10});
 local healthBar = display.newText({parent=ui, text="Health: " .. state.playerHealth, x=0,y=10});
+local ammo = display.newText({parent=ui, text="Ammo: " .. state.bullets, x = 0, y = display.contentHeight - 50})
+local spawnRateIndicator = display.newText({parent=ui, text="Spawning every (ms): " .. state.spawnRate, x = 0, y = display.contentHeight - 100})
+
 
 -- DEBUG
 -- debug config options
@@ -105,33 +117,52 @@ local enemies = {
     triangle={
         vertices={0,-25, 30,25, -30,25},
         colour={1,1,1},
-        name="triangle"
+        health=1,
+        speed=3,
+        strength=2
     },
     square={
-        strength=1,
-        damage=1,
         vertices={-25,-25, 25,-25, 25,25, -25,25},
-        name="square",
-        colour={0.3,0.65,1}
+        colour={0.3,0.65,1},
+        health=2,
+        speed=4,
+        strength=4
     },
     pentagon= {
         vertices={0,-30, 30,-10, 20,30, -20,30, -30,-10},
         colour={245/255, 40/255, 145/255},
-        name="pentagon"
+        health=4,
+        speed=6,
+        strength=10
     }
 }
 
 
 local function enemyBulletCollision(enemy, e)
     if (e.other.type == "bullet") then
-        liveEnemies[enemy.id] = nil
-        enemy:removeSelf()
+        local bullet = e.other
+        -- cancel transition so onComplete event doesn't try to delete this bullet after we've
+        -- already deleted it here
+        transition.cancel(bullet.transition)
+        bullet:removeSelf()
+        local damageDone = math.random(state.weapon.damage.min, state.weapon.damage.max) 
+        print("damage done " .. damageDone)
+        enemy.health = enemy.health - damageDone
+        if enemy.health <= 0 then
+            liveEnemies[enemy.id] = nil
+            enemy:removeSelf()
+        end
     end
 end
 
 local paint  = {
     type=  "image",
     filename ="arrow.png"
+}
+
+local damageTexture = {
+    type = "image",
+    filename="damage.png"
 }
 
 -- DEBUG
@@ -146,15 +177,19 @@ function spawnEnemy()
     local index = math.random(1, #spawningEnemies)
     local shape = spawningEnemies[index]
     -- change y to -100, -50 before prod
-    local enemy = display.newPolygon(enemiesUi, math.random(0, display.contentWidth), math.random(0, 1), enemies[shape].vertices);
+    local enemy = display.newPolygon(enemiesUi, math.random(0, display.contentWidth), -50, enemies[shape].vertices);
     local id = os.time() + math.random(1, 9999)
 
 
+
+    enemy.type = "enemy"
+    enemy.shape = shape
+    enemy.id = id
+    enemy.health = enemies[shape].health
+
+    -- enemy.fill = paint
     enemy:setFillColor(unpack(enemies[shape]["colour"]))
 
-    enemy.fill = paint
-    enemy.type = "enemy"
-    enemy.id = id
 
     enemy.collision = enemyBulletCollision
     enemy:addEventListener("collision")
@@ -190,7 +225,7 @@ function updateEnemies()
 
     for id, enemy in next, liveEnemies, nil do
 
-        print("updating enemy " .. enemy.id)
+        -- print("updating enemy " .. enemy.id)
 
         local l = (player.x - enemy.x)
         local h = (player.y - enemy.y)
@@ -211,7 +246,9 @@ function updateEnemies()
             transition.to(enemy, {time=500, rotation = angle})
         end
 
-        enemy:setLinearVelocity(l / 10, h/10)
+        -- enemy:setLinearVelocity(l / 10, h/10)
+        local speed = enemies[enemy.shape].speed
+        enemy:setLinearVelocity(speed * l / 10, speed * h/10)
 
         -- DEBUG
         if (debug.drawCentreIndicators) then
@@ -232,21 +269,26 @@ local function restorePlayerHealth()
     state.playerHealth = state.playerHealth + math.random(1, 5)
 end
 
+local function restoreAmmo()
+    state.bullets = state.bullets + math.random(5, 15)
+end
+
 local function onPlayerCollision(player, e)
 
     if (e.phase == "began") then
-        print("player colliding with: " .. e.other.type)
+        -- print("player colliding with: " .. e.other.type)
 
         if (e.other.type == "enemy") then
             -- player:applyLinearImpulse(20, 20, player.x, player.y)
             -- player:applyForce(20, 20, player.x, player.y)
-            state.playerHealth = state.playerHealth - 2
+            state.playerHealth = state.playerHealth - enemies[e.other.shape].strength
 
         else if (e.other.type == "coin") then
+            e.other:removeSelf()
             timer.cancel(coinTimers[e.other.id])
             table.remove(coinTimers, e.other.id)
             restorePlayerHealth()
-            e.other:removeSelf()
+            restoreAmmo()
             -- prevent propagation
             return true
         end
@@ -262,27 +304,35 @@ player:addEventListener("collision")
 
 local function control()
     if state.playerHealth <= 0 then
-        -- restorePlayerHealth()
+        restorePlayerHealth()
+        timer.performWithDelay(100,spawnEnemy,2);
+        display.newText({text="You ran out of health! 💀", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
     end
     healthBar.text = "Health: " .. state.playerHealth
+    ammo.text = "Ammo: " .. state.bullets
+    spawnRateIndicator.text = "Spawning every (ms): " .. state.spawnRate
 end
 
 local function deleteBullet(b)
     b:removeSelf()
 end
 
+
 local function fireWeapon(e) 
 
     if e.type == "down" then
-
-        local bullet = display.newRect(player.x, player.y, 3, 20);
-        bullet:setFillColor(1, 0.16, 0)
-        physics.addBody(bullet,"dynamic");
-        bullet.isSensor = true
-        bullet.type = "bullet"
-
-        transition.to(bullet, {x=e.x, y=e.y, onComplete=deleteBullet})
-        
+        if (state.bullets > 0) then
+            local bullet = display.newCircle(player.x, player.y, 4);
+            bullet:setFillColor(1, 0.16, 0)
+            physics.addBody(bullet,"dynamic");
+            bullet.isSensor = true
+            bullet.type = "bullet"
+            state.bullets = state.bullets - 1
+            -- keep a reference to the transition in the bullet itself so we can cancel it
+            -- if the bullet hits something (an enemy) before it reaches its destination x and y
+            -- and is deleted. else onComplete will try to delete a bullet that no longer exists.
+            bullet.transition = transition.to(bullet, {x=e.x, y=e.y, onComplete=deleteBullet})
+        end
     end
 
 end
@@ -293,6 +343,7 @@ local function coinClick(e)
         print(coinTimers[e.target.id])
         timer.cancel(coinTimers[e.target.id])
         table.remove(coinTimers, e.target.id)
+        restoreAmmo()
         restorePlayerHealth()
         e.target:removeSelf()
         -- prevent propagation
@@ -322,7 +373,14 @@ local function spawnCoins()
 
 end
 
-
+local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
+local function difficultyControl()
+    print("running difficulty control...")
+    timer.cancel(spawnEnemiesTimer)
+    state.spawnRate = math.round(10000 / (os.time() - beginTime))
+    spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
+end
+timer.performWithDelay(5000, difficultyControl, 0)
 
 
 timer.performWithDelay(10, control, 0)
@@ -331,6 +389,5 @@ timer.performWithDelay(1000,spawnCoins,0);
 
 timer.performWithDelay(1000, updateEnemies, 0);
 
-timer.performWithDelay(5000, spawnEnemy, 0);
 
 Runtime:addEventListener("mouse", fireWeapon)
