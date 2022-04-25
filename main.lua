@@ -19,27 +19,35 @@ physics.setGravity(0,0);
 -- physics.setPositionIterations( 6 )
 
 local state = { 
-    playerHealth=10, 
+    playerHealth=50, 
     weapon = {
-        damage= { min=1, max=2 }
+        damage  = { min=1, max=2 }
     },
-    bullets = 10,
-    spawnRate = 2500
+    bullets     = 10,
+    spawnRate   = 2500,
+    stage       = 1
+}
+
+local healthBarTexture = {
+    type = "image",
+    filename="healthBar.png"
 }
 
 local titleText = display.newText({parent=ui, text="Rectangles's Revenge", x=display.contentCenterX,y=10});
-local healthBar = display.newText({parent=ui, text="Health: " .. state.playerHealth, x=0,y=10});
+local healthBar = display.newRect(ui, display.contentCenterX, display.contentHeight - 25, 250, 20);
+healthBar.fill = healthBarTexture
+-- healthBar:setFillColor(0.3, 1, 0.42)
 local ammo = display.newText({parent=ui, text="Ammo: " .. state.bullets, x = 0, y = display.contentHeight - 50})
-local spawnRateIndicator = display.newText({parent=ui, text="Spawning every (ms): " .. state.spawnRate, x = 0, y = display.contentHeight - 100})
+local spawnRateIndicator = display.newText({parent=ui, text="Spawning every (ms): " .. state.spawnRate, x = 0, y = display.contentHeight - 25})
 
 
 -- DEBUG
 -- debug config options
 local debug = {
-    drawEnemyPlayerTriangles= false,
-    drawCollisionBoxes= false,
-    drawCentreIndicators = false,
-    drawBoundaryMarkers = false,
+    drawEnemyPlayerTriangles    = false,
+    drawCollisionBoxes          = false,
+    drawCentreIndicators        = false,
+    drawBoundaryMarkers         = false,
 }
 
 -- DEBUG
@@ -90,7 +98,10 @@ local function onKey(e)
         end
 
     elseif (e.phase == "up" and table.indexOf(movementKeys, e.keyName) ~=  nil) then
-        timer.cancel(moveTimers[e.keyName])
+        -- prevents possible bug when an arrow key is pressed while window is out of focus and then window is subsequently focused
+        if (moveTimers[e.keyName] ~= nil) then
+            timer.cancel(moveTimers[e.keyName])
+        end
     end
 
     return false
@@ -109,40 +120,80 @@ if (debug.drawBoundaryMarkers) then
     display.newLine(display.contentWidth,0, display.contentWidth,display.contentHeight);
 end
 
-local spawningEnemies = {"triangle", "square", "pentagon"}
+local spawningEnemies = {"triangle", "square"}
 local liveEnemies = {}
 
 -- enemy properties 
 local enemies = {
     triangle={
-        vertices={0,-25, 30,25, -30,25},
-        colour={1,1,1},
-        health=1,
-        speed=3,
-        strength=2
+        vertices    ={0,-25, 30,25, -30,25},
+        colour      ={1,1,1},
+        health      =1,
+        speed       =3,
+        strength    =2
     },
     square={
-        vertices={-25,-25, 25,-25, 25,25, -25,25},
-        colour={0.3,0.65,1},
-        health=2,
-        speed=4,
-        strength=4
+        vertices    ={-25,-25, 25,-25, 25,25, -25,25},
+        colour      ={0.3,0.65,1},
+        health      =2,
+        speed       =4,
+        strength    =4
     },
     pentagon= {
-        vertices={0,-30, 30,-10, 20,30, -20,30, -30,-10},
-        colour={245/255, 40/255, 145/255},
-        health=4,
-        speed=6,
-        strength=10
+        vertices    ={0,-30, 30,-10, 20,30, -20,30, -30,-10},
+        colour      ={245/255, 40/255, 145/255},
+        health      =4,
+        speed       =6,
+        strength    =10
+    },
+    hexagon= {
+        vertices    ={-30,10, -25,-15, 0,-30, 25,-15, 30,10, 15,30, -15,30},
+        colour      ={0.2, 0, 0.4},
+        health      =5,
+        speed       =6,
+        strength    =12
+    },
+    heptagon= {
+        vertices    ={-25,-15, 0,-30, 25,-15, 30,10, 15,30, -15,30, -30,10},
+        colour      ={1, 0.5, 0},
+        health      =6,
+        speed       =6,
+        strength    =12
+    },
+    hexagon = {
+        vertices    ={-30,0, -20,-22, 0,-30, 20,-22, 30,0, 20,22, 0,30, -20,22},
+        colour      ={1, 0.16, 0},
+        health      =10,
+        speed       =4,
+        strength    =12
     }
 }
+
+local weapons = {
+    -- classic
+    {
+        damage  = { min=1, max=2 },
+        name    = "Old Reliable"
+    },
+    -- can hit up to three enemies before being destroyed 
+    {
+        damage  = { min=1, max=2 },
+        name    = "The Tripler"
+    },
+    -- more powerful than classic
+    {
+        damage  = { min=3, max=5 },
+        name    = "The Enemy Destroyer"
+    }
+}
+
+local maxHealth = 50
 
 
 local function enemyBulletCollision(enemy, e)
     if (e.other.type == "bullet") then
         local bullet = e.other
-        -- cancel transition so onComplete event doesn't try to delete this bullet after we've
-        -- already deleted it here
+        -- cancel transition so onComplete event doesn't try to delete this bullet after we've already deleted it here
         transition.cancel(bullet.transition)
         bullet:removeSelf()
         local damageDone = math.random(state.weapon.damage.min, state.weapon.damage.max) 
@@ -165,6 +216,8 @@ local damageTexture = {
     filename="damage.png"
 }
 
+
+
 -- DEBUG
 local playerIndicator
 local enemyIndicator 
@@ -174,6 +227,7 @@ if (debug.drawCentreIndicators) then
 end
 
 function spawnEnemy()
+    print("spawning")
     local index = math.random(1, #spawningEnemies)
     local shape = spawningEnemies[index]
     -- change y to -100, -50 before prod
@@ -222,9 +276,10 @@ function updateEnemies()
         enemyPlayerTriangles = {}
     end
 
+    local totalEnemies = 0
 
     for id, enemy in next, liveEnemies, nil do
-
+        totalEnemies = totalEnemies + 1
         -- print("updating enemy " .. enemy.id)
 
         local l = (player.x - enemy.x)
@@ -259,11 +314,13 @@ function updateEnemies()
             playerIndicator = display.newCircle(player.x, player.y, 5);
             playerIndicator:setFillColor(0.5,0.5,0.5,1)
         end
+
+        -- print("processed " .. totalEnemies .. " enemies")
         
     end
 end
 
-spawnEnemy()
+-- spawnEnemy()
 local coinTimers = {}
 local function restorePlayerHealth()
     state.playerHealth = state.playerHealth + math.random(1, 5)
@@ -302,16 +359,7 @@ player.collision = onPlayerCollision
 player:addEventListener("collision")
 
 
-local function control()
-    if state.playerHealth <= 0 then
-        restorePlayerHealth()
-        timer.performWithDelay(100,spawnEnemy,2);
-        display.newText({text="You ran out of health! 💀", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
-    end
-    healthBar.text = "Health: " .. state.playerHealth
-    ammo.text = "Ammo: " .. state.bullets
-    spawnRateIndicator.text = "Spawning every (ms): " .. state.spawnRate
-end
+
 
 local function deleteBullet(b)
     b:removeSelf()
@@ -377,17 +425,52 @@ local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0)
 local function difficultyControl()
     print("running difficulty control...")
     timer.cancel(spawnEnemiesTimer)
-    state.spawnRate = math.round(10000 / (os.time() - beginTime))
+    local elapsedTime = os.time() - beginTime
+    state.spawnRate = math.max(2500 - (((os.time() - beginTime)) * 75), 1100)
     spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
 end
-timer.performWithDelay(5000, difficultyControl, 0)
 
 
-timer.performWithDelay(10, control, 0)
+local difficultyControlTimer = timer.performWithDelay(5000, difficultyControl, 0)
 
-timer.performWithDelay(1000,spawnCoins,0);
 
-timer.performWithDelay(1000, updateEnemies, 0);
+local spawnCoinsTimer = timer.performWithDelay(1000,spawnCoins,0);
+
+local updateEnemiesTimer = timer.performWithDelay(1000, updateEnemies, 0);
 
 
 Runtime:addEventListener("mouse", fireWeapon)
+
+local function control()
+    if state.playerHealth <= 0 and state.stage ~= "dead" then
+        state.stage = "dead"
+        restorePlayerHealth()
+        timer.cancel(spawnCoinsTimer)
+        timer.cancel(difficultyControlTimer)
+        timer.cancel(spawnCoinsTimer)
+        timer.cancel(updateEnemiesTimer)
+        timer.cancel(spawnEnemiesTimer)
+        display.newText({text="You ran out of health", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
+        healthBar.width = 0
+    end
+    healthBar.width = (state.playerHealth / maxHealth) * 250
+    if (state.playerHealth < 20) then
+        healthBar:setFillColor(1, 0.3, 0.3, 1)
+    end
+    ammo.text = "Ammo: " .. state.bullets
+    spawnRateIndicator.text = "Spawning every (ms): " .. state.spawnRate
+
+    local elapsedTime = os.time() - beginTime
+    if (elapsedTime >= 10 and table.indexOf(spawningEnemies,"pentagon") == nil) then
+        table.insert(spawningEnemies,"pentagon")
+    elseif (elapsedTime >= 30 and table.indexOf(spawningEnemies, "hexagon") == nil) then
+        table.insert(spawningEnemies,"hexagon")
+    elseif (elapsedTime >= 60 and table.indexOf(spawningEnemies, "heptagon") == nil) then
+        table.insert(spawningEnemies, "heptagon")
+    elseif (elapsedTime >= 120 and table.indexOf(spawningEnemies,"hexagon")) then
+        table.insert(spawningEnemies, "hexagon")
+    end
+end
+local controlTimer = timer.performWithDelay(10, control, 0)
+
+-- physics.addBody(display.newPolygon(100, 100, enemies.hexagon.vertices),"dynamic", {shape=enemies.hexagon.vertices});
