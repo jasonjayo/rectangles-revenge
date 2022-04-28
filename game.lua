@@ -18,24 +18,47 @@ local ui
 local enemiesUi
 local indicatorsUi
 
+local backgroundImage
+
 local beginTime = os.time()
 
+local maxHealthBarWidth = 200
+local maxHealth = 50
+local maxAmmoBarHeight = 40
+local maxAmmo = 40
+
 local state = { 
-    playerHealth=50, 
+    playerHealth=50,
+    money = 100,
+    score = 0,
     weapon = {
         damage  = { min=1, max=2 }
     },
-    bullets     = 10,
+    bullets     = maxAmmo,
     spawnRate   = 2500,
     stage       = 1
 }
+
+local initialState = composer.getVariable("initialState");
+state.money = initialState.money
+state.weaponsOwned = initialState.weaponsOwned
+state.weapon = initialState.weapon
+state.highscore = initialState.highscore
+
 local player
 
 -- local titleText = display.newText({parent=ui, text="Rectangles's Revenge", x=display.contentCenterX,y=10});
 local healthBar
 
+local ammoText
 local ammo
 local spawnRateIndicator
+local moneyIndicator
+local moneyCounter
+
+local score
+
+
 
 -- DEBUG
 -- debug config options
@@ -74,20 +97,20 @@ local moveUp = function() return move("up") end
 local moveDown = function() return move("down") end
 
 local function onKey(e)
-	print("pressed")
     if (e.phase == "down") then
         
         if (e.keyName == "up") then
-            moveTimers.up = timer.performWithDelay(10, moveUp, 0); 
+            moveTimers.up = timer.performWithDelay(10, moveUp, 0, "movement"); 
         elseif (e.keyName == "down") then
-            moveTimers.down = timer.performWithDelay(10, moveDown, 0);
+            moveTimers.down = timer.performWithDelay(10, moveDown, 0, "movement");
         elseif (e.keyName == "left") then
-            moveTimers.left = timer.performWithDelay(10, moveLeft, 0); 
+            moveTimers.left = timer.performWithDelay(10, moveLeft, 0, "movement"); 
         elseif (e.keyName == "right") then
-            moveTimers.right = timer.performWithDelay(10, moveRight, 0);
+            moveTimers.right = timer.performWithDelay(10, moveRight, 0, "movement");
         end
 
     elseif (e.phase == "up" and table.indexOf(movementKeys, e.keyName) ~=  nil) then
+	    print("key up")
         -- prevents possible bug when an arrow key is pressed while window is out of focus and then window is subsequently focused
         if (moveTimers[e.keyName] ~= nil) then
             timer.cancel(moveTimers[e.keyName])
@@ -174,7 +197,6 @@ local weapons = {
     }
 }
 
-local maxHealth = 50
 
 
 local function enemyBulletCollision(enemy, e)
@@ -204,6 +226,12 @@ local damageTexture = {
 }
 
 
+local coinTexture  = {
+    type=  "image",
+    filename ="coin_texture.png"
+}
+
+
 
 -- DEBUG
 local playerIndicator
@@ -214,7 +242,6 @@ if (debug.drawCentreIndicators) then
 end
 
 function spawnEnemy()
-    print("spawning")
     local index = math.random(1, #spawningEnemies)
     local shape = spawningEnemies[index]
     -- change y to -100, -50 before prod
@@ -228,7 +255,7 @@ function spawnEnemy()
     enemy.id = id
     enemy.health = enemies[shape].health
 
-    -- enemy.fill = paint
+    -- enemy.fill = coinTexture
     enemy:setFillColor(unpack(enemies[shape]["colour"]))
 
 
@@ -307,14 +334,27 @@ function updateEnemies()
     end
 end
 
--- spawnEnemy()
 local coinTimers = {}
 local function restorePlayerHealth()
-    state.playerHealth = state.playerHealth + math.random(1, 5)
+    local increaseAmount = math.random(1, 5)
+    if (state.playerHealth + increaseAmount <= maxHealth) then
+        state.playerHealth = state.playerHealth + increaseAmount
+        return true
+    end
+    return false
 end
 
 local function restoreAmmo()
-    state.bullets = state.bullets + math.random(5, 15)
+    if (state.bullets == maxAmmo) then 
+        return false
+    end
+    local restoreAmount = math.random(5, 8)
+    if (state.bullets + restoreAmount < maxAmmo) then
+        state.bullets = state.bullets + restoreAmount
+    else
+        state.bullets = state.bullets + (restoreAmount - ((state.bullets + restoreAmount) - maxAmmo))
+    end
+    return true
 end
 
 local function onPlayerCollision(player, e)
@@ -331,8 +371,11 @@ local function onPlayerCollision(player, e)
             e.other:removeSelf()
             timer.cancel(coinTimers[e.other.id])
             table.remove(coinTimers, e.other.id)
-            restorePlayerHealth()
-            restoreAmmo()
+            -- restorePlayerHealth()
+            -- restoreAmmo()
+            if (not(restorePlayerHealth()) and not(restoreAmmo())) then
+                state.money = state.money + 3
+            end
             -- prevent propagation
             return true
         end
@@ -393,7 +436,10 @@ end
 local function spawnCoins()
 
     local coin = display.newCircle(coins, math.random(0, display.contentWidth), math.random(0, display.contentHeight), 10);
-    coin:setFillColor(1,1,0.1)
+    coin.fill = coinTexture
+    coin.alpha = 0.75
+
+    -- coin:setFillColor(1,1,0.1)
 
     coin:addEventListener("mouse", coinClick)
     local expiryTimer = timer.performWithDelay(math.random(1000, 5000), removeCoin, 1, "coinExpiry")
@@ -409,7 +455,6 @@ end
 
 local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
 local function difficultyControl()
-    print("running difficulty control...")
     timer.cancel(spawnEnemiesTimer)
     local elapsedTime = os.time() - beginTime
     state.spawnRate = math.max(2500 - (((os.time() - beginTime)) * 75), 1100)
@@ -418,29 +463,37 @@ end
 
 
 local function endGame() 
-	composer.gotoScene("menu", {time=800, effect="crossFade"})
+    composer.setVariable("finalState", state)
+	composer.gotoScene("gameOver", {time=800, effect="crossFade"})
 end
 
 local function control()
     if state.playerHealth <= 0 and state.stage ~= "dead" then
         state.stage = "dead"
-        -- -- restorePlayerHealth()
         -- timer.cancel(spawnCoinsTimer)
         -- timer.cancel(difficultyControlTimer)
         -- timer.cancel(updateEnemiesTimer)
         -- timer.cancel(spawnEnemiesTimer)
-        display.newText({text="You ran out of health", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
+        -- display.newText({text="You ran out of health", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
         healthBar.width = 0
+        endGame()
 		timer.performWithDelay( 2000, endGame )
+        composer.setVariable("state", state);
     end
-    healthBar.width = (state.playerHealth / maxHealth) * 250
+    healthBar.width = (state.playerHealth / maxHealth) * maxHealthBarWidth
+    ammo.height = (state.bullets / maxAmmo) * maxAmmoBarHeight
     if (state.playerHealth < 20) then
         healthBar:setFillColor(1, 0.3, 0.3, 1)
+    else 
+        healthBar:setFillColor(0.3, 1, 0.42)
     end
-    ammo.text = "Ammo: " .. state.bullets
-    spawnRateIndicator.text = "Spawning every (ms): " .. state.spawnRate
+    ammoText.text = "Ammo: " .. state.bullets
+    -- spawnRateIndicator.text = "Spawning every (ms): " .. state.spawnRate
+    moneyCounter.text = state.money
 
     local elapsedTime = os.time() - beginTime
+    state.score = elapsedTime
+    score.text = state.score
     if (elapsedTime >= 10 and table.indexOf(spawningEnemies,"pentagon") == nil) then
         table.insert(spawningEnemies,"pentagon")
     elseif (elapsedTime >= 30 and table.indexOf(spawningEnemies, "hexagon") == nil) then
@@ -462,10 +515,11 @@ function scene:create( event )
 	local sceneGroup = self.view
 	-- Code here runs when the scene is first created but has not yet appeared on screen
 
-
-
 	physics.pause()
 
+    -- display groups
+    background = display.newGroup()
+    sceneGroup:insert(background)
 	coins = display.newGroup();
 	sceneGroup:insert(coins)
 	playerGroup = display.newGroup();
@@ -477,27 +531,45 @@ function scene:create( event )
 	indicatorsUi = display.newGroup();
 	sceneGroup:insert(indicatorsUi)
 
+    -- game scene background
+    backgroundImage = display.newImageRect(background,"game_background.png", display.actualContentWidth, display.actualContentHeight);
+    backgroundImage.x = display.contentCenterX
+    backgroundImage.y = display.contentCenterY
+    backgroundImage.alpha = 0.15
+
+    -- player character
 	player = display.newRect(playerGroup, display.contentCenterX, display.contentCenterY, 100, 50);
 	player.fill = {255, 255, 255}
 	print("player x " .. player.x)
-
 	physics.addBody(player,"kinematic",{density=1, friction=1, bounce=0});
 	player.isFixedRotation = true
-	healthBar = display.newRect(ui, display.contentCenterX, display.contentHeight - 25, 250, 12);
+
+    -- ui
+    -- health bar
+    local healthBarBackground = display.newRect(ui, display.contentCenterX - (maxHealthBarWidth / 2), display.contentHeight - 25, maxHealthBarWidth, 12)
+    healthBarBackground:setFillColor(1,1,1,0.5)
+	healthBar = display.newRect(ui, display.contentCenterX - (maxHealthBarWidth / 2), display.contentHeight - 25, maxHealthBarWidth, 12);
 	healthBar:setFillColor(0.3, 1, 0.42)
-	ammo = display.newText({parent=ui, text="Ammo: " .. state.bullets, x = 0, y = display.contentHeight - 50})
-	spawnRateIndicator = display.newText({parent=ui, text="Spawning every (ms): " .. state.spawnRate, x = 0, y = display.contentHeight - 25})
+    healthBar.anchorX = 0
+    healthBarBackground.anchorX = 0
+    -- ammo
+	ammoText = display.newText({parent=ui, text="Ammo: " .. state.bullets, x = 0, y = display.contentHeight - 25, fontSize=12})
+    ammo = display.newRect(ui,0,display.contentHeight - 40, 12, maxAmmoBarHeight);
+    ammo.anchorY = ammo.height
+	-- spawnRateIndicator = display.newText({parent=ui, text="Spawning every (ms): " .. state.spawnRate, x = 0, y = 25})
 
-	player.collision = onPlayerCollision
-	player:addEventListener("collision")
+    -- money
+    moneyCounter = display.newText(ui, state.money, display.contentWidth - 50, 20, native.systemFont, 18);
+    moneyIndicator = display.newImage(ui,"coin_texture.png",display.contentWidth - 68, 20);
+    moneyCounter.anchorX = 0
+    moneyIndicator:scale(0.1, 0.1)
 
-	local difficultyControlTimer
-	
-	
+    -- score counter
+    score = display.newText(ui, state.score, 0, 20, native.systemFont, 18)
+
+    local difficultyControlTimer
 	local spawnCoinsTimer
-	
 	local updateEnemiesTimer
-	
 	local controlTimer
 end
 
@@ -513,20 +585,21 @@ function scene:show( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs when the scene is entirely on screen
-		physics.start()
+        
+        -- add event listeners
 		Runtime:addEventListener("key", onKey)
+		Runtime:addEventListener("mouse", fireWeapon)
+        player.collision = onPlayerCollision
+	    player:addEventListener("collision")
 		
+        -- set timers
 		difficultyControlTimer = timer.performWithDelay(5000, difficultyControl, 0)
-	
-	
 		spawnCoinsTimer = timer.performWithDelay(1000,spawnCoins,0);
-		
 		updateEnemiesTimer = timer.performWithDelay(1000, updateEnemies, 0);
-		
 		controlTimer = timer.performWithDelay(10, control, 0)
 	
+		physics.start()
 		
-		Runtime:addEventListener("mouse", fireWeapon)
 	end
 end
 
@@ -542,16 +615,23 @@ function scene:hide( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs immediately after the scene goes entirely off screen
+        -- cancel all game timers
 		timer.cancel(spawnCoinsTimer)
         timer.cancel(difficultyControlTimer)
         timer.cancel(updateEnemiesTimer)
         timer.cancel(spawnEnemiesTimer)
 		timer.cancel(controlTimer)
 
+        -- remove timers from all coins and all player-movement-related timers
 		timer.cancel("coinExpiry")
+        timer.cancel("movement")
 
-		Runtime:removeEventListener("mouse", fireWeapon)
+        -- remove event listeners
 		Runtime:removeEventListener("key", onKey)
+		Runtime:removeEventListener("mouse", fireWeapon)
+        player:removeEventListener("collision")
+
+        -- end physics simulation and remove scene
 		physics.pause()
 		composer.removeScene("game")
 

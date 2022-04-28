@@ -1,4 +1,4 @@
--- CREDIT SCENE TEMPLATE
+
 local composer = require( "composer" )
 
 local scene = composer.newScene()
@@ -7,22 +7,10 @@ local scene = composer.newScene()
 -- Code outside of the scene event functions below will only be executed ONCE unless
 -- the scene is removed entirely (not recycled) via "composer.removeScene()"
 -- -----------------------------------------------------------------------------------
-
-local function gotoGame()
-    composer.gotoScene( "game", {time=800, effect="crossFade"} )
-end
- 
-local function gotoHighScores()
-    composer.gotoScene( "highscores", {time=800, effect="crossFade"} )
+local function gotoMenu()
+	composer.gotoScene("menu", {time=800, effect="crossFade"}); 
 end
 
-local function gotoHelp()
-	composer.gotoScene("instructions", {time=800, effect="crossFade"})
-end
-
-local function gotoShop()
-	composer.gotoScene("shop", {time=800, effect="crossFade"})
-end
 
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
@@ -33,27 +21,31 @@ function scene:create( event )
 
 	local sceneGroup = self.view
 	-- Code here runs when the scene is first created but has not yet appeared on screen
-	local background = display.newImage(sceneGroup, "menu_background.png",display.contentCenterX, display.contentCenterY);
 
-	local titleBackground = display.newRect(sceneGroup, display.contentCenterX, display.contentHeight * 0.25, display.actualContentWidth, 75);
-	titleBackground:setFillColor(0,0,0,0.85);
-	local title = display.newText(sceneGroup, "RECTANGLE'S REVENGE", display.contentCenterX, display.contentHeight * 0.25, native.systemFontBold, 40);
+	local title = display.newText(sceneGroup, "Instructions", display.contentCenterX, 30, native.systemFont, 35);
 
-	local playButtonBackground = display.newRect(sceneGroup, display.contentCenterX, display.contentCenterY + 5, 100, 50)
-	playButtonBackground:setFillColor(0,0,0,0.65)
-	local playButton = display.newText(sceneGroup, "Play", display.contentCenterX, display.contentCenterY + 5, native.systemFont, 25);
-	playButtonBackground:addEventListener("tap", gotoGame)
-	-- playButton:setFillColor({1,1,1})
+	local instructionText = [[The polygons are your enemies! Your goal is to survive as long as you can. 
+	You must kill them using your weapon.
 
-	local shopButtonBackground = display.newRect(sceneGroup, display.contentCenterX, display.contentCenterY + 70, 100, 50)
-	shopButtonBackground:setFillColor(0,0,0,0.65)
-	local shopButton = display.newText(sceneGroup, "Shop", display.contentCenterX, display.contentCenterY + 70, native.systemFont, 25);
-	shopButtonBackground:addEventListener("tap", gotoShop)
+	Controls:
+	- To fire your weapon, left click.
+	- To move, use the arrow keys.
+	- Coins are picked up by passing over them. They give you a health boost and some ammo.
+	        - If you already have max health and max ammo, they'll increase your coin balance!
+	- The game gets progressively harder the longer you last as more challenging enemies spawn.
 
-	local helpButtonBackground = display.newRect(sceneGroup, display.contentCenterX, display.contentCenterY + 123, 100, 30)
-	helpButtonBackground:setFillColor(0,0,0,0.65)
-	local helpButton = display.newText(sceneGroup, "Instructions", display.contentCenterX, display.contentCenterY + 123, native.systemFont, 15);
-	helpButtonBackground:addEventListener("tap", gotoHelp)
+	Shop:
+	- You can use your coin balance to buy weapon upgrades or apply one you already own.
+
+	The more sides an enemy has, the stronger it is! 
+	]]
+	
+	local instructionsBody = display.newText(sceneGroup, instructionText, display.contentCenterX, display.contentCenterY * 1.3, display.contentWidth, display.contentHeight * 0.9, native.systemFont, 12)
+
+	local backButtonBackground = display.newRect(sceneGroup	,20,29,80,30);
+	backButtonBackground:setFillColor(1, 1, 1, 0.1)
+	local backButton = display.newText(sceneGroup, "< Back", 20, 30);
+	backButtonBackground:addEventListener("tap", gotoMenu)
 
 end
 
