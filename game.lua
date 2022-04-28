@@ -1,5 +1,6 @@
 
 local composer = require( "composer" )
+local json = require("json")
 
 local scene = composer.newScene()
 
@@ -27,6 +28,14 @@ local maxHealth = 50
 local maxAmmoBarHeight = 40
 local maxAmmo = 40
 
+local shootSound = audio.loadSound("laser3.ogg")
+local playerDamageSound = audio.loadSound("zap2.ogg")
+local enemyDamageSound = audio.loadSound("twoTone2.ogg");
+local coinSound = audio.loadSound("tone1.ogg")
+local music = audio.loadStream("music.mp3")
+audio.reserveChannels( 1 )
+audio.setVolume( 0.5, { channel=1 } )
+
 local state = { 
     playerHealth=50,
     money = 100,
@@ -49,6 +58,7 @@ local player
 
 -- local titleText = display.newText({parent=ui, text="Rectangles's Revenge", x=display.contentCenterX,y=10});
 local healthBar
+local healthBarBackground
 
 local ammoText
 local ammo
@@ -203,11 +213,16 @@ local function enemyBulletCollision(enemy, e)
     if (e.other.type == "bullet") then
         local bullet = e.other
         -- cancel transition so onComplete event doesn't try to delete this bullet after we've already deleted it here
-        transition.cancel(bullet.transition)
-        bullet:removeSelf()
+        print(bullet.health)
+        bullet.health = bullet.health - 1
+        if (bullet.health <= 0) then
+            transition.cancel(bullet.transition)
+            bullet:removeSelf()
+        end
         local damageDone = math.random(state.weapon.damage.min, state.weapon.damage.max) 
-        print("damage done " .. damageDone)
         enemy.health = enemy.health - damageDone
+        transition.to(enemy, {time=100, alpha = (enemy.health / enemies[enemy.shape].health)})
+        audio.play(enemyDamageSound);
         if enemy.health <= 0 then
             liveEnemies[enemy.id] = nil
             enemy:removeSelf()
@@ -336,12 +351,16 @@ end
 
 local coinTimers = {}
 local function restorePlayerHealth()
+    if (state.playerHealth == maxHealth) then
+        return
+    end
     local increaseAmount = math.random(1, 5)
     if (state.playerHealth + increaseAmount <= maxHealth) then
         state.playerHealth = state.playerHealth + increaseAmount
         return true
+    else
+        state.playerHealth = state.playerHealth + (increaseAmount - ((state.playerHealth + increaseAmount) - maxHealth))
     end
-    return false
 end
 
 local function restoreAmmo()
@@ -366,11 +385,12 @@ local function onPlayerCollision(player, e)
             -- player:applyLinearImpulse(20, 20, player.x, player.y)
             -- player:applyForce(20, 20, player.x, player.y)
             state.playerHealth = state.playerHealth - enemies[e.other.shape].strength
-
+            audio.play(playerDamageSound);
         else if (e.other.type == "coin") then
             e.other:removeSelf()
             timer.cancel(coinTimers[e.other.id])
             table.remove(coinTimers, e.other.id)
+            audio.play(coinSound)
             -- restorePlayerHealth()
             -- restoreAmmo()
             if (not(restorePlayerHealth()) and not(restoreAmmo())) then
@@ -404,11 +424,13 @@ local function fireWeapon(e)
             physics.addBody(bullet,"dynamic");
             bullet.isSensor = true
             bullet.type = "bullet"
+            bullet.health = state.weapon.bulletHealth
             state.bullets = state.bullets - 1
             -- keep a reference to the transition in the bullet itself so we can cancel it
             -- if the bullet hits something (an enemy) before it reaches its destination x and y
             -- and is deleted. else onComplete will try to delete a bullet that no longer exists.
             bullet.transition = transition.to(bullet, {x=e.x, y=e.y, onComplete=deleteBullet})
+            audio.play(shootSound)
         end
     end
 
@@ -422,6 +444,7 @@ local function coinClick(e)
         table.remove(coinTimers, e.target.id)
         restoreAmmo()
         restorePlayerHealth()
+        audio.play(coinSound)
         e.target:removeSelf()
         -- prevent propagation
         return true
@@ -463,7 +486,7 @@ end
 
 
 local function endGame() 
-    composer.setVariable("finalState", state)
+    composer.setVariable("state", state)
 	composer.gotoScene("gameOver", {time=800, effect="crossFade"})
 end
 
@@ -475,9 +498,9 @@ local function control()
         -- timer.cancel(updateEnemiesTimer)
         -- timer.cancel(spawnEnemiesTimer)
         -- display.newText({text="You ran out of health", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
-        healthBar.width = 0
+        -- healthBar.width = 0
         endGame()
-		timer.performWithDelay( 2000, endGame )
+		-- timer.performWithDelay( 2000, endGame )
         composer.setVariable("state", state);
     end
     healthBar.width = (state.playerHealth / maxHealth) * maxHealthBarWidth
@@ -497,6 +520,7 @@ local function control()
     if (elapsedTime >= 10 and table.indexOf(spawningEnemies,"pentagon") == nil) then
         table.insert(spawningEnemies,"pentagon")
     elseif (elapsedTime >= 30 and table.indexOf(spawningEnemies, "hexagon") == nil) then
+        print("adding pentagon")
         table.insert(spawningEnemies,"hexagon")
     elseif (elapsedTime >= 60 and table.indexOf(spawningEnemies, "heptagon") == nil) then
         table.insert(spawningEnemies, "heptagon")
@@ -546,8 +570,8 @@ function scene:create( event )
 
     -- ui
     -- health bar
-    local healthBarBackground = display.newRect(ui, display.contentCenterX - (maxHealthBarWidth / 2), display.contentHeight - 25, maxHealthBarWidth, 12)
-    healthBarBackground:setFillColor(1,1,1,0.5)
+    healthBarBackground = display.newRect(ui, display.contentCenterX - (maxHealthBarWidth / 2), display.contentHeight - 25, maxHealthBarWidth, 12)
+    healthBarBackground:setFillColor(0.65,0.65,0.65)
 	healthBar = display.newRect(ui, display.contentCenterX - (maxHealthBarWidth / 2), display.contentHeight - 25, maxHealthBarWidth, 12);
 	healthBar:setFillColor(0.3, 1, 0.42)
     healthBar.anchorX = 0
@@ -592,6 +616,8 @@ function scene:show( event )
         player.collision = onPlayerCollision
 	    player:addEventListener("collision")
 		
+        audio.play( music, { channel=1, loops=-1 } )
+
         -- set timers
 		difficultyControlTimer = timer.performWithDelay(5000, difficultyControl, 0)
 		spawnCoinsTimer = timer.performWithDelay(1000,spawnCoins,0);
@@ -599,7 +625,7 @@ function scene:show( event )
 		controlTimer = timer.performWithDelay(10, control, 0)
 	
 		physics.start()
-		
+
 	end
 end
 
@@ -622,9 +648,12 @@ function scene:hide( event )
         timer.cancel(spawnEnemiesTimer)
 		timer.cancel(controlTimer)
 
+
         -- remove timers from all coins and all player-movement-related timers
 		timer.cancel("coinExpiry")
         timer.cancel("movement")
+
+        audio.stop( 1 )
 
         -- remove event listeners
 		Runtime:removeEventListener("key", onKey)

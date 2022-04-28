@@ -15,39 +15,47 @@ local game = {
             cost            = 0,
             description     = "Default",
             name            = "Old Reliable",
-            id              = "default"
+            id              = "default",
+            bulletHealth    = 1
         },
         {
             
             -- hits up to three times before being destroyed 
             damage          = { min=1, max=2 },
-            cost            = 100,
-            description     = "Bullets hit up to three times before being destroyed",
+            cost            = 25,
+            description     = "Bullets hit up to three times before being destroyed.",
             name            = "Ranger",
-            id              = "range"
+            id              = "range",
+            bulletHealth    = 3
         },
         {
             -- more powerful bullets
             damage          = { min=3, max=5 },
-            cost            = 250,
+            cost            = 50,
             description     = "The ultimate weapon. Bullets do more damage.",
             name            = "The Ultimate",
-            id              = "ultimate"
+            id              = "ultimate",
+            bulletHealth    = 1
         },
     }
 }
 
 -- persists
 local state = {
-    money = 500,
+    money = 0,
     weaponsOwned = {
         "default"
     },
-    weapon = {
-        id = "default"
-    },
-    score = 999
+    weapon = game.weapons[1],
+    highscore = 0
 }
+
+-- local test = {info= {a= "This is test 1"}}
+-- composer.setVariable("test", test);
+-- test = {info= {a="This is test 2"}}
+-- composer.setVariable("test", test);
+
+-- print(composer.getVariable("test").info.a)
 
 
 -- we want some game state information to persist across playing sessions, namely:
@@ -67,11 +75,9 @@ local filePath = system.pathForFile("storedState.json", system.DocumentsDirector
 local file, errorString = io.open( filePath, "r" )
 
 	if file then
-        print("found file")
 		local contents = file:read("*a")
 		storedState = json.decode(contents)
         
-        print("money is " .. storedState.money)
 
 
         state.money = storedState.money
@@ -84,12 +90,7 @@ local file, errorString = io.open( filePath, "r" )
  
         if file then
             file:write(json.encode(
-                {
-                    money=state.money,
-                    weaponsOwned=state.weaponsOwned,
-                    weapon=state.weapon,
-                    highscore=0
-                }
+                state
             ))
             io.close( file )
         end

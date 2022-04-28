@@ -9,40 +9,14 @@ local scene = composer.newScene()
 -- -----------------------------------------------------------------------------------
 local json = require("json")
 
-local state = composer.getVariable("finalState");
-
-
-
-local storedState = {}
-
-local filePath = system.pathForFile("storedState.json", system.DocumentsDirectory)
-
-local file, errorString = io.open( filePath, "r" )
-
-if file then
-	local contents = file:read("*a")
-	storedState = json.decode(contents)
-
-	print("old high score is " .. storedState.highscore)
-	if (storedState.highscore < state.score) then
-		print("new high core")
-		display.newText("New high score!", display.contentCenterX, display.contentCenterY);
-
-		storedState.highscore = state.score
-	end
-	io.close(file)
-else
-	print(errorString)
+local function gotoGame()
+    composer.gotoScene( "game", {time=800, effect="crossFade"} )
 end
 
-storedState.money = state.money
-
-file = io.open(filePath, "w")
-
-if file then
-	file:write(json.encode(storedState))
-	io.close(file)
+local function gotoMenu()
+    composer.gotoScene( "menu", {time=800, effect="crossFade"} )
 end
+
 
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
@@ -53,6 +27,57 @@ function scene:create( event )
 
 	local sceneGroup = self.view
 	-- Code here runs when the scene is first created but has not yet appeared on screen
+
+	local state = composer.getVariable("state");
+
+	local title = display.newText(sceneGroup, "You ran out of health. Your final score is", display.contentCenterX, display.contentCenterY - 120, native.systemFont, 14)
+
+	local scoreText = display.newText(sceneGroup, state.score, display.contentCenterX, display.contentCenterY - 60, native.systemFontBold, 75);
+
+	local playAgainButton = display.newText(sceneGroup, "Play Again", display.contentCenterX - 100, display.contentCenterY + 90, native.systemFont, 14);
+	local playAgainButtonBackground = display.newRect(sceneGroup, display.contentCenterX - 100,display.contentCenterY + 90, 100,30);
+	playAgainButtonBackground:setFillColor(1,1,1,0.1)
+	playAgainButtonBackground:addEventListener("tap", gotoGame)
+
+	local menuButton = display.newText(sceneGroup, "Menu", display.contentCenterX + 100, display.contentCenterY + 90, native.systemFont, 14);
+	local menuButtonBackground = display.newRect(sceneGroup, display.contentCenterX + 100, display.contentCenterY + 90, 100,30);
+	menuButtonBackground:setFillColor(1,1,1,0.1)
+	menuButtonBackground:addEventListener("tap", gotoMenu)
+
+	local storedState = {}
+
+	local filePath = system.pathForFile("storedState.json", system.DocumentsDirectory)
+
+	local file, errorString = io.open( filePath, "r" )
+
+	if file then
+		local contents = file:read("*a")
+		storedState = json.decode(contents)
+
+		storedState.money = state.money
+		if (storedState.highscore < state.score) then
+			print("new high core")
+			display.newText(sceneGroup, "New high score! Congratulations!", display.contentCenterX, display.contentCenterY, native.systemFont, 14);
+
+			storedState.highscore = state.score
+		else
+			display.newText(sceneGroup, "Thanks for playing.", display.contentCenterX, display.contentCenterY, native.systemFont, 14);
+		end
+		io.close(file)
+	else
+		print(errorString)
+	end
+
+	storedState.money = state.money
+
+	file = io.open(filePath, "w")
+
+	if file then
+		file:write(json.encode(storedState))
+		io.close(file)
+	end
+
+	composer.setVariable("initialState",storedState);
 
 end
 
@@ -84,6 +109,7 @@ function scene:hide( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs immediately after the scene goes entirely off screen
+		composer.removeScene("gameOver")
 
 	end
 end
