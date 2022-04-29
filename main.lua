@@ -1,5 +1,6 @@
 ----------------------------------------------
 -- CS4043 Group 17
+-- Rectangle's Revenge
 -- Comments and code by Jason Gill (21304092)
 ----------------------------------------------
 
@@ -57,7 +58,7 @@ local state = {
 }
 
 -- we want some game state information to persist across playing sessions, namely:
---      eqipped weapon
+--      equipped weapon
 --      owned weapons
 --      high score
 --      money

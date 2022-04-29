@@ -58,6 +58,7 @@ local state = {
     score       = 0,
     weapon      = nil,
     bullets     = maxAmmo,
+    -- initially spawning 1 enemy every 2500 ms
     spawnRate   = 2500,
     stage       = 1
 }
@@ -85,6 +86,12 @@ local moneyCounter
 local score
 local coinTimers = {}
 
+-- timers
+local controlTimer
+local difficultyControlTimer
+local spawnCoinsTimer
+local updateEnemiesTimer
+local spawnEnemiesTimer
 
 -- DEBUG
 -- debug config options
@@ -203,7 +210,7 @@ local enemies = {
     }
 }
 
--- event listener callbacks
+-- event listener callback
 local function enemyBulletCollision(enemy, e)
     if (e.other.type == "bullet") then
         -- deal with bullet
@@ -303,7 +310,7 @@ local function updateEnemies()
         end
 
         local speed = enemies[enemy.shape].speed
-        -- an enemy's speed is based on how far away they are from a player
+        -- an enemy's speed is based on how far away they are from the player
         -- l is horizontal component of distance from player to enemy, h is vertical component
         enemy:setLinearVelocity(speed * l / 10, speed * h/10)
 
@@ -438,8 +445,6 @@ local function spawnCoins()
 
 end
 
--- local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
-
 local function difficultyControl()
     timer.cancel(spawnEnemiesTimer)
     local elapsedTime = os.time() - beginTime
@@ -453,15 +458,15 @@ local function endGame()
 end
 
 local function control()
+    -- update healthbar
+    healthBar.width = math.max(((state.playerHealth / maxHealth) * maxHealthBarWidth), 0)
+    -- update ammo bar
+    ammo.height = (state.bullets / maxAmmo) * maxAmmoBarHeight
     if state.playerHealth <= 0 and state.stage ~= "dead" then
         state.stage = "dead"
         endGame()
         composer.setVariable("state", state);
     end
-    -- update healthbar
-    healthBar.width = (state.playerHealth / maxHealth) * maxHealthBarWidth
-    -- update ammo bar
-    ammo.height = (state.bullets / maxAmmo) * maxAmmoBarHeight
     -- health bar turns red if health is low
     if (state.playerHealth < 20) then
         healthBar:setFillColor(1, 0.3, 0.3, 1)
@@ -479,13 +484,13 @@ local function control()
     -- update score counter on screen
     score.text = state.score
     -- as gameplay progresses, the more difficult enemies are added to the table of enemies that can spawn
-    if (elapsedTime >= 10 and table.indexOf(spawningEnemies,"pentagon") == nil) then
+    if (elapsedTime >= 10 and table.indexOf(spawningEnemies, "pentagon") == nil) then
         table.insert(spawningEnemies,"pentagon")
     elseif (elapsedTime >= 30 and table.indexOf(spawningEnemies, "hexagon") == nil) then
         table.insert(spawningEnemies,"hexagon")
     elseif (elapsedTime >= 60 and table.indexOf(spawningEnemies, "heptagon") == nil) then
         table.insert(spawningEnemies, "heptagon")
-    elseif (elapsedTime >= 120 and table.indexOf(spawningEnemies,"octagon") == nil) then
+    elseif (elapsedTime >= 120 and table.indexOf(spawningEnemies, "octagon") == nil) then
         table.insert(spawningEnemies, "octagon")
     end
 end
@@ -497,7 +502,6 @@ end
 function scene:create( event )
 
 	local sceneGroup = self.view
-	-- Code here runs when the scene is first created but has not yet appeared on screen
 
 	physics.pause()
 
@@ -549,13 +553,6 @@ function scene:create( event )
     -- score counter
     score = display.newText(ui, "", 0, 20, native.systemFont, 18)
 
-    -- timers
-    local difficultyControlTimer
-	local spawnCoinsTimer
-	local updateEnemiesTimer
-	local controlTimer
-    local spawnEnemiesTimer
-
     controlTimer = timer.performWithDelay(10, control, 0)
 end
 
@@ -565,10 +562,8 @@ function scene:show( event )
 	local phase = event.phase
 
 	if ( phase == "will" ) then
-		-- Code here runs when the scene is still off screen (but is about to come on screen)
 
 	elseif ( phase == "did" ) then
-		-- Code here runs when the scene is entirely on screen
         
         -- add event listeners
 		Runtime:addEventListener("key", onKey)
@@ -596,10 +591,8 @@ function scene:hide( event )
 	local phase = event.phase
 
 	if ( phase == "will" ) then
-		-- Code here runs when the scene is on screen (but is about to go off screen)
 
 	elseif ( phase == "did" ) then
-		-- Code here runs immediately after the scene goes entirely off screen
 
         -- cancel all game timers
 		timer.cancel(spawnCoinsTimer)

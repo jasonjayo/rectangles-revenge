@@ -18,7 +18,7 @@ local function purchase(e)
 		composer.gotoScene("wait", {time=200, effect="crossFade"});
 		return true
 	else
-		-- cannot afford, flash red around our money balace on screen to indicate this to player
+		-- cannot afford, flash red around money balance on screen to indicate this to player
 		notEnoughMoney.alpha = 1
 		local notEnoughMoneyFlash = transition.blink(notEnoughMoney, {time=750})
 		timer.performWithDelay(1000,function() 
@@ -47,7 +47,6 @@ end
 function scene:create( event )
 
 	local sceneGroup = self.view
-	-- Code here runs when the scene is first created but has not yet appeared on screen
 
 	-- back button
 	local backButtonBackground = display.newRect(sceneGroup	,20,29,80,30);
@@ -125,10 +124,8 @@ function scene:hide( event )
 	local phase = event.phase
 
 	if ( phase == "will" ) then
-		-- Code here runs when the scene is on screen (but is about to go off screen)
 
 	elseif ( phase == "did" ) then
-		-- Code here runs immediately after the scene goes entirely off screen
 		-- when moving away from this scene, we need to update the state as we may have bought a new weapon, in which case
 		-- our money and owned weapons list will have changed. our equipped weapon may also have changed 
 		composer.setVariable("state",state);

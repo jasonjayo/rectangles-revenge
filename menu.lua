@@ -20,7 +20,6 @@ end
 function scene:create( event )
 
 	local sceneGroup = self.view
-	-- Code here runs when the scene is first created but has not yet appeared on screen
 
 	-- menu background image
 	local background = display.newImage(sceneGroup, "menu_background.png",display.contentCenterX, display.contentCenterY);
