@@ -1,19 +1,15 @@
 
-local composer = require( "composer" )
+local composer = require("composer")
 local json = require("json")
-
 local scene = composer.newScene()
 
--- -----------------------------------------------------------------------------------
--- Code outside of the scene event functions below will only be executed ONCE unless
--- the scene is removed entirely (not recycled) via "composer.removeScene()"
--- -----------------------------------------------------------------------------------
 
 local physics = require("physics")
 physics.start()
 physics.setGravity(0,0);
 
-local coins
+
+-- display groups
 local playerGroup
 local ui
 local enemiesUi
@@ -21,13 +17,17 @@ local indicatorsUi
 
 local backgroundImage
 
+local coins
+
 local beginTime = os.time()
 
+-- health and ammo maximums
 local maxHealthBarWidth = 200
 local maxHealth = 50
 local maxAmmoBarHeight = 40
 local maxAmmo = 40
 
+-- audio
 local shootSound = audio.loadSound("laser3.ogg")
 local playerDamageSound = audio.loadSound("zap2.ogg")
 local enemyDamageSound = audio.loadSound("twoTone2.ogg");
@@ -36,18 +36,29 @@ local music = audio.loadStream("music.mp3")
 audio.reserveChannels( 1 )
 audio.setVolume( 0.5, { channel=1 } )
 
+-- textures
+local coinTexture  = {
+    type=  "image",
+    filename ="coin_texture.png"
+}
+local bulletTexture = {
+    type = "image",
+    filename = "bullet_texture.png"
+}
+
+-- state control
 local state = { 
+    -- nil values are set below
     playerHealth=50,
-    money = 100,
-    score = 0,
-    weapon = {
-        damage  = { min=1, max=2 }
-    },
+    money       = nil,
+    score       = 0,
+    weapon      = nil,
     bullets     = maxAmmo,
     spawnRate   = 2500,
     stage       = 1
 }
 
+-- some values persist from session to session (e.g., money)
 local initialState = composer.getVariable("initialState");
 state.money = initialState.money
 state.weaponsOwned = initialState.weaponsOwned
@@ -56,7 +67,6 @@ state.highscore = initialState.highscore
 
 local player
 
--- local titleText = display.newText({parent=ui, text="Rectangles's Revenge", x=display.contentCenterX,y=10});
 local healthBar
 local healthBarBackground
 
@@ -67,7 +77,7 @@ local moneyIndicator
 local moneyCounter
 
 local score
-
+local coinTimers = {}
 
 
 -- DEBUG
@@ -83,10 +93,10 @@ local debug = {
 if (debug.drawCollisionBoxes) then
     physics.setDrawMode("hybrid")
 end
+
 -- PLAYER
-
+-- movement
 local moveTimers = { left, right, up, down };
-
 local movementKeys = { "left", "right", "up", "down"}
 
 local function move(direction)
@@ -120,7 +130,6 @@ local function onKey(e)
         end
 
     elseif (e.phase == "up" and table.indexOf(movementKeys, e.keyName) ~=  nil) then
-	    print("key up")
         -- prevents possible bug when an arrow key is pressed while window is out of focus and then window is subsequently focused
         if (moveTimers[e.keyName] ~= nil) then
             timer.cancel(moveTimers[e.keyName])
@@ -131,19 +140,18 @@ local function onKey(e)
 end
 
 
--- leftButton:addEventListener("tap", onMoveLeftTap)
-
-
-
+-- DEBUG
 if (debug.drawBoundaryMarkers) then
     display.newLine(0,0,0,display.contentHeight);
     display.newLine(display.contentWidth,0, display.contentWidth,display.contentHeight);
 end
 
+-- ENEMIES
+-- only triangles and squares can spawn at the beginning. this list is updated as game progresses and gets harder
 local spawningEnemies = {"triangle", "square"}
 local liveEnemies = {}
 
--- enemy properties 
+-- enemy properties
 local enemies = {
     triangle={
         vertices    ={0,-25, 30,25, -30,25},
@@ -168,7 +176,7 @@ local enemies = {
     },
     hexagon= {
         vertices    ={-30,10, -25,-15, 0,-30, 25,-15, 30,10, 15,30, -15,30},
-        colour      ={0.2, 0, 0.4},
+        colour      ={0.4, 0, 0.8},
         health      =5,
         speed       =6,
         strength    =12
@@ -180,7 +188,7 @@ local enemies = {
         speed       =6,
         strength    =12
     },
-    hexagon = {
+    octagon = {
         vertices    ={-30,0, -20,-22, 0,-30, 20,-22, 30,0, 20,22, 0,30, -20,22},
         colour      ={1, 0.16, 0},
         health      =10,
@@ -189,31 +197,11 @@ local enemies = {
     }
 }
 
-local weapons = {
-    -- classic
-    {
-        damage  = { min=1, max=2 },
-        name    = "Old Reliable"
-    },
-    -- can hit up to three enemies before being destroyed 
-    {
-        damage  = { min=1, max=2 },
-        name    = "The Tripler"
-    },
-    -- more powerful than classic
-    {
-        damage  = { min=3, max=5 },
-        name    = "The Enemy Destroyer"
-    }
-}
-
-
-
+-- event listener callbacks
 local function enemyBulletCollision(enemy, e)
     if (e.other.type == "bullet") then
         local bullet = e.other
         -- cancel transition so onComplete event doesn't try to delete this bullet after we've already deleted it here
-        print(bullet.health)
         bullet.health = bullet.health - 1
         if (bullet.health <= 0) then
             transition.cancel(bullet.transition)
@@ -221,32 +209,16 @@ local function enemyBulletCollision(enemy, e)
         end
         local damageDone = math.random(state.weapon.damage.min, state.weapon.damage.max) 
         enemy.health = enemy.health - damageDone
+        -- enemy gets more transparent the weaker they are
         transition.to(enemy, {time=100, alpha = (enemy.health / enemies[enemy.shape].health)})
         audio.play(enemyDamageSound);
+        -- remove enemy if dead
         if enemy.health <= 0 then
             liveEnemies[enemy.id] = nil
             enemy:removeSelf()
         end
     end
 end
-
-local paint  = {
-    type=  "image",
-    filename ="arrow.png"
-}
-
-local damageTexture = {
-    type = "image",
-    filename="damage.png"
-}
-
-
-local coinTexture  = {
-    type=  "image",
-    filename ="coin_texture.png"
-}
-
-
 
 -- DEBUG
 local playerIndicator
@@ -256,46 +228,38 @@ if (debug.drawCentreIndicators) then
     enemyIndicator = display.newCircle(0,0,5)
 end
 
-function spawnEnemy()
+-- core function, spawns enemies
+local function spawnEnemy()
     local index = math.random(1, #spawningEnemies)
     local shape = spawningEnemies[index]
-    -- change y to -100, -50 before prod
+    -- enemies always come from the top of the screen - this is by design to make things slightly easier & more predictable for player 
     local enemy = display.newPolygon(enemiesUi, math.random(0, display.contentWidth), -50, enemies[shape].vertices);
     local id = os.time() + math.random(1, 9999)
 
+    print("spawning " .. shape)
 
-
+    -- set properties for this enemy. these are read later in event callbacks to understand what kind of enemy we're dealing with
     enemy.type = "enemy"
     enemy.shape = shape
     enemy.id = id
     enemy.health = enemies[shape].health
 
-    -- enemy.fill = coinTexture
     enemy:setFillColor(unpack(enemies[shape]["colour"]))
-
 
     enemy.collision = enemyBulletCollision
     enemy:addEventListener("collision")
 
     physics.addBody(enemy, "dynamic", {density=10, friction=1, bounce=0.8, shape=enemies[shape]["vertices"]})
-    -- physics.pause()
 
-    local l = player.x - enemy.x
-    local h = player.y - enemy.y
-    local hypot = math.sqrt(math.pow(l, 2) + math.pow(h, 2))
-
+    -- add enemy to table of enemies
     liveEnemies[id] = enemy
 end
 
-local direction = {x=1,y=1}
-
-function setDirection()
-    direction = {x=math.random(-1,1),y=math.random(-1,1)}
-end
-
+-- this was used for debugging purposes only
 local enemyPlayerTriangles = {}
 
-function updateEnemies()
+-- core function, controls behaviour of enemies
+local function updateEnemies()
     
     -- DEBUG
     if (debug.drawEnemyPlayerTriangles) then
@@ -305,12 +269,10 @@ function updateEnemies()
         enemyPlayerTriangles = {}
     end
 
-    local totalEnemies = 0
-
+    -- loop through each enemy
     for id, enemy in next, liveEnemies, nil do
-        totalEnemies = totalEnemies + 1
-        -- print("updating enemy " .. enemy.id)
 
+        -- hypot is distance from this enemy to the player
         local l = (player.x - enemy.x)
         local h = (player.y - enemy.y)
         local hypot = (math.sqrt(math.pow(l, 2) + math.pow(h, 2)))
@@ -320,9 +282,10 @@ function updateEnemies()
             table.insert(enemyPlayerTriangles, display.newLine(enemy.x, enemy.y, player.x, player.y, enemy.x, player.y, enemy.x, enemy.y))
         end
 
+        -- want enemies to points towards the player. this angle will do that
         local angle = math.asin(l / hypot);
 
-        -- sort consistency
+        -- transition smoothly to the angle - i.e, to face towards the player
         if (h < 0) then
             transition.to(enemy, {time=500, rotation = math.deg(angle)})
         else
@@ -330,8 +293,8 @@ function updateEnemies()
             transition.to(enemy, {time=500, rotation = angle})
         end
 
-        -- enemy:setLinearVelocity(l / 10, h/10)
         local speed = enemies[enemy.shape].speed
+        -- an enemy's speed is based on how far away they are from a player 
         enemy:setLinearVelocity(speed * l / 10, speed * h/10)
 
         -- DEBUG
@@ -343,56 +306,61 @@ function updateEnemies()
             playerIndicator = display.newCircle(player.x, player.y, 5);
             playerIndicator:setFillColor(0.5,0.5,0.5,1)
         end
-
-        -- print("processed " .. totalEnemies .. " enemies")
         
     end
 end
 
-local coinTimers = {}
 local function restorePlayerHealth()
-    if (state.playerHealth == maxHealth) then
-        return
+    -- conditional checks to prevent health going above the predefined maximum
+    -- returns true if health increased, else false
+    if (state.playerHealth >= maxHealth) then
+        return false
     end
     local increaseAmount = math.random(1, 5)
     if (state.playerHealth + increaseAmount <= maxHealth) then
         state.playerHealth = state.playerHealth + increaseAmount
-        return true
     else
-        state.playerHealth = state.playerHealth + (increaseAmount - ((state.playerHealth + increaseAmount) - maxHealth))
+        state.playerHealth = state.playerHealth + (maxHealth - state.playerHealth)
     end
+    return true
 end
 
 local function restoreAmmo()
-    if (state.bullets == maxAmmo) then 
+    -- conditional checks to prevent ammo going above the predefined maximum
+    -- returns true if ammo increased, else false
+    if (state.bullets >= maxAmmo) then 
         return false
     end
     local restoreAmount = math.random(5, 8)
     if (state.bullets + restoreAmount < maxAmmo) then
         state.bullets = state.bullets + restoreAmount
     else
-        state.bullets = state.bullets + (restoreAmount - ((state.bullets + restoreAmount) - maxAmmo))
+        state.bullets = state.bullets + (maxAmmo - state.bullets)
     end
     return true
 end
 
+-- player collision event
 local function onPlayerCollision(player, e)
 
     if (e.phase == "began") then
-        -- print("player colliding with: " .. e.other.type)
 
         if (e.other.type == "enemy") then
-            -- player:applyLinearImpulse(20, 20, player.x, player.y)
-            -- player:applyForce(20, 20, player.x, player.y)
+            -- player-enemy collision
             state.playerHealth = state.playerHealth - enemies[e.other.shape].strength
             audio.play(playerDamageSound);
+
         else if (e.other.type == "coin") then
+            -- player-coin collision
             e.other:removeSelf()
+            -- each coin has a timer set to destroy it after a certain amount of time. need to cancel that here otherwise it'll
+            -- try and destroy a coin that no longer exists as we've removed it here
             timer.cancel(coinTimers[e.other.id])
             table.remove(coinTimers, e.other.id)
             audio.play(coinSound)
-            -- restorePlayerHealth()
-            -- restoreAmmo()
+            -- add to our money balance if player health and ammo are both full
+            -- only if restorePlayerHealth returns false and inverted to true, meaning health is full, will the and actually check the next part
+            -- i.e., only if health is full will ammo restore. then if both are full, the condition is not(false) and not(false) so money added to balance
             if (not(restorePlayerHealth()) and not(restoreAmmo())) then
                 state.money = state.money + 3
             end
@@ -403,30 +371,24 @@ local function onPlayerCollision(player, e)
 end
 end
 
-
-
-
-
-
-
-
 local function deleteBullet(b)
     b:removeSelf()
 end
 
-
 local function fireWeapon(e) 
-
     if e.type == "down" then
+        -- check if player has enough ammo
         if (state.bullets > 0) then
+            -- create bullet
             local bullet = display.newCircle(player.x, player.y, 4);
             bullet:setFillColor(1, 0.16, 0)
             physics.addBody(bullet,"dynamic");
             bullet.isSensor = true
             bullet.type = "bullet"
             bullet.health = state.weapon.bulletHealth
+            bullet.fill = bulletTexture
             state.bullets = state.bullets - 1
-            -- keep a reference to the transition in the bullet itself so we can cancel it
+            -- keep a reference to the movement transition in the bullet itself so we can cancel it
             -- if the bullet hits something (an enemy) before it reaches its destination x and y
             -- and is deleted. else onComplete will try to delete a bullet that no longer exists.
             bullet.transition = transition.to(bullet, {x=e.x, y=e.y, onComplete=deleteBullet})
@@ -436,21 +398,6 @@ local function fireWeapon(e)
 
 end
 
-
-local function coinClick(e)
-    if e.type == "down" then
-        print(coinTimers[e.target.id])
-        timer.cancel(coinTimers[e.target.id])
-        table.remove(coinTimers, e.target.id)
-        restoreAmmo()
-        restorePlayerHealth()
-        audio.play(coinSound)
-        e.target:removeSelf()
-        -- prevent propagation
-        return true
-    end
-end
-
 local function removeCoin(e)
     e.source.params.coin:removeSelf()
     table.remove(coinTimers, e.source.params.coin.id)
@@ -458,15 +405,15 @@ end
 
 local function spawnCoins()
 
+    -- create coin
     local coin = display.newCircle(coins, math.random(0, display.contentWidth), math.random(0, display.contentHeight), 10);
     coin.fill = coinTexture
     coin.alpha = 0.75
 
-    -- coin:setFillColor(1,1,0.1)
-
-    coin:addEventListener("mouse", coinClick)
     local expiryTimer = timer.performWithDelay(math.random(1000, 5000), removeCoin, 1, "coinExpiry")
-    expiryTimer.params = {coin= coin}
+    -- pass this coin itself to its deletion timer to allow easily deletion in timer
+    expiryTimer.params = {coin=coin}
+
     local id = os.time()
     coin.type = "coin"
     coin.id = id
@@ -477,13 +424,13 @@ local function spawnCoins()
 end
 
 local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
+
 local function difficultyControl()
     timer.cancel(spawnEnemiesTimer)
     local elapsedTime = os.time() - beginTime
     state.spawnRate = math.max(2500 - (((os.time() - beginTime)) * 75), 1100)
     spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
 end
-
 
 local function endGame() 
     composer.setVariable("state", state)
@@ -493,39 +440,38 @@ end
 local function control()
     if state.playerHealth <= 0 and state.stage ~= "dead" then
         state.stage = "dead"
-        -- timer.cancel(spawnCoinsTimer)
-        -- timer.cancel(difficultyControlTimer)
-        -- timer.cancel(updateEnemiesTimer)
-        -- timer.cancel(spawnEnemiesTimer)
-        -- display.newText({text="You ran out of health", x=display.contentCenterX, y=display.contentCenterY, fontSize=50});
-        -- healthBar.width = 0
         endGame()
-		-- timer.performWithDelay( 2000, endGame )
         composer.setVariable("state", state);
     end
+    -- update healthbar
     healthBar.width = (state.playerHealth / maxHealth) * maxHealthBarWidth
+    -- update ammo bar
     ammo.height = (state.bullets / maxAmmo) * maxAmmoBarHeight
+    -- health bar turns red if health is low
     if (state.playerHealth < 20) then
         healthBar:setFillColor(1, 0.3, 0.3, 1)
     else 
         healthBar:setFillColor(0.3, 1, 0.42)
     end
     ammoText.text = "Ammo: " .. state.bullets
-    -- spawnRateIndicator.text = "Spawning every (ms): " .. state.spawnRate
+    -- update money balance
     moneyCounter.text = state.money
 
+    -- difficulty increases as elapsed time increses
     local elapsedTime = os.time() - beginTime
+    -- the score just the elpased time
     state.score = elapsedTime
+    -- update score counter on screen
     score.text = state.score
+    -- as gameplay progresses, the more difficult enemies are added to the table of enemies that can spawn
     if (elapsedTime >= 10 and table.indexOf(spawningEnemies,"pentagon") == nil) then
         table.insert(spawningEnemies,"pentagon")
     elseif (elapsedTime >= 30 and table.indexOf(spawningEnemies, "hexagon") == nil) then
-        print("adding pentagon")
         table.insert(spawningEnemies,"hexagon")
     elseif (elapsedTime >= 60 and table.indexOf(spawningEnemies, "heptagon") == nil) then
         table.insert(spawningEnemies, "heptagon")
-    elseif (elapsedTime >= 120 and table.indexOf(spawningEnemies,"hexagon")) then
-        table.insert(spawningEnemies, "hexagon")
+    elseif (elapsedTime >= 120 and table.indexOf(spawningEnemies,"octagon") == nil) then
+        table.insert(spawningEnemies, "octagon")
     end
 end
 
@@ -533,7 +479,6 @@ end
 -- Scene event functions
 -- -----------------------------------------------------------------------------------
 
--- create()
 function scene:create( event )
 
 	local sceneGroup = self.view
@@ -564,7 +509,6 @@ function scene:create( event )
     -- player character
 	player = display.newRect(playerGroup, display.contentCenterX, display.contentCenterY, 100, 50);
 	player.fill = {255, 255, 255}
-	print("player x " .. player.x)
 	physics.addBody(player,"kinematic",{density=1, friction=1, bounce=0});
 	player.isFixedRotation = true
 
@@ -580,7 +524,6 @@ function scene:create( event )
 	ammoText = display.newText({parent=ui, text="Ammo: " .. state.bullets, x = 0, y = display.contentHeight - 25, fontSize=12})
     ammo = display.newRect(ui,0,display.contentHeight - 40, 12, maxAmmoBarHeight);
     ammo.anchorY = ammo.height
-	-- spawnRateIndicator = display.newText({parent=ui, text="Spawning every (ms): " .. state.spawnRate, x = 0, y = 25})
 
     -- money
     moneyCounter = display.newText(ui, state.money, display.contentWidth - 50, 20, native.systemFont, 18);
@@ -591,14 +534,13 @@ function scene:create( event )
     -- score counter
     score = display.newText(ui, state.score, 0, 20, native.systemFont, 18)
 
+    -- timers
     local difficultyControlTimer
 	local spawnCoinsTimer
 	local updateEnemiesTimer
 	local controlTimer
 end
 
-
--- show()
 function scene:show( event )
 
 	local sceneGroup = self.view
@@ -616,6 +558,7 @@ function scene:show( event )
         player.collision = onPlayerCollision
 	    player:addEventListener("collision")
 		
+        -- play background music
         audio.play( music, { channel=1, loops=-1 } )
 
         -- set timers
@@ -629,8 +572,6 @@ function scene:show( event )
 	end
 end
 
-
--- hide()
 function scene:hide( event )
 
 	local sceneGroup = self.view
@@ -641,6 +582,7 @@ function scene:hide( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs immediately after the scene goes entirely off screen
+
         -- cancel all game timers
 		timer.cancel(spawnCoinsTimer)
         timer.cancel(difficultyControlTimer)
@@ -648,11 +590,11 @@ function scene:hide( event )
         timer.cancel(spawnEnemiesTimer)
 		timer.cancel(controlTimer)
 
-
         -- remove timers from all coins and all player-movement-related timers
 		timer.cancel("coinExpiry")
         timer.cancel("movement")
 
+        -- stop background music
         audio.stop( 1 )
 
         -- remove event listeners
@@ -668,22 +610,12 @@ function scene:hide( event )
 end
 
 
--- destroy()
-function scene:destroy( event )
-
-	local sceneGroup = self.view
-	-- Code here runs prior to the removal of scene's view
-
-end
-
-
 -- -----------------------------------------------------------------------------------
 -- Scene event function listeners
 -- -----------------------------------------------------------------------------------
 scene:addEventListener( "create", scene )
 scene:addEventListener( "show", scene )
 scene:addEventListener( "hide", scene )
-scene:addEventListener( "destroy", scene )
 -- -----------------------------------------------------------------------------------
 
 return scene
