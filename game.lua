@@ -1,4 +1,3 @@
-
 local composer = require("composer")
 local json = require("json")
 local scene = composer.newScene()
@@ -46,7 +45,7 @@ local bulletTexture = {
     filename = "bullet_texture.png"
 }
 
--- state control
+-- initial state
 local state = { 
     -- nil values are set below
     playerHealth=50,
@@ -59,6 +58,8 @@ local state = {
 }
 
 -- some values persist from session to session (e.g., money)
+-- these are brought in from a json file in main.lua and stored in initialState
+-- we now need to set our actual state variables here to reflect them
 local initialState = composer.getVariable("initialState");
 state.money = initialState.money
 state.weaponsOwned = initialState.weaponsOwned
@@ -200,6 +201,7 @@ local enemies = {
 -- event listener callbacks
 local function enemyBulletCollision(enemy, e)
     if (e.other.type == "bullet") then
+        -- deal with bullet
         local bullet = e.other
         -- cancel transition so onComplete event doesn't try to delete this bullet after we've already deleted it here
         bullet.health = bullet.health - 1
@@ -207,6 +209,7 @@ local function enemyBulletCollision(enemy, e)
             transition.cancel(bullet.transition)
             bullet:removeSelf()
         end
+        -- deal with enemy
         local damageDone = math.random(state.weapon.damage.min, state.weapon.damage.max) 
         enemy.health = enemy.health - damageDone
         -- enemy gets more transparent the weaker they are
@@ -228,15 +231,15 @@ if (debug.drawCentreIndicators) then
     enemyIndicator = display.newCircle(0,0,5)
 end
 
--- core function, spawns enemies
+-- spawns enemies
 local function spawnEnemy()
+    -- pick random enemy to spawn
     local index = math.random(1, #spawningEnemies)
     local shape = spawningEnemies[index]
     -- enemies always come from the top of the screen - this is by design to make things slightly easier & more predictable for player 
     local enemy = display.newPolygon(enemiesUi, math.random(0, display.contentWidth), -50, enemies[shape].vertices);
+    -- generate random id for enemy
     local id = os.time() + math.random(1, 9999)
-
-    print("spawning " .. shape)
 
     -- set properties for this enemy. these are read later in event callbacks to understand what kind of enemy we're dealing with
     enemy.type = "enemy"
@@ -246,6 +249,7 @@ local function spawnEnemy()
 
     enemy:setFillColor(unpack(enemies[shape]["colour"]))
 
+    -- add enemy-bullet collision event listener
     enemy.collision = enemyBulletCollision
     enemy:addEventListener("collision")
 
@@ -258,7 +262,7 @@ end
 -- this was used for debugging purposes only
 local enemyPlayerTriangles = {}
 
--- core function, controls behaviour of enemies
+-- controls behaviour of enemies
 local function updateEnemies()
     
     -- DEBUG
@@ -269,10 +273,10 @@ local function updateEnemies()
         enemyPlayerTriangles = {}
     end
 
-    -- loop through each enemy
+    -- go through each enemy
     for id, enemy in next, liveEnemies, nil do
 
-        -- hypot is distance from this enemy to the player
+        -- hypot(enuse) is distance from this enemy to the player
         local l = (player.x - enemy.x)
         local h = (player.y - enemy.y)
         local hypot = (math.sqrt(math.pow(l, 2) + math.pow(h, 2)))
@@ -294,7 +298,8 @@ local function updateEnemies()
         end
 
         local speed = enemies[enemy.shape].speed
-        -- an enemy's speed is based on how far away they are from a player 
+        -- an enemy's speed is based on how far away they are from a player
+        -- l is horizontal component of distance from player to enemy, h is vertical component
         enemy:setLinearVelocity(speed * l / 10, speed * h/10)
 
         -- DEBUG
@@ -312,7 +317,7 @@ end
 
 local function restorePlayerHealth()
     -- conditional checks to prevent health going above the predefined maximum
-    -- returns true if health increased, else false
+    -- function returns true if health increased, else false
     if (state.playerHealth >= maxHealth) then
         return false
     end
@@ -327,7 +332,7 @@ end
 
 local function restoreAmmo()
     -- conditional checks to prevent ammo going above the predefined maximum
-    -- returns true if ammo increased, else false
+    -- function returns true if ammo increased, else false
     if (state.bullets >= maxAmmo) then 
         return false
     end
@@ -340,7 +345,7 @@ local function restoreAmmo()
     return true
 end
 
--- player collision event
+-- player collision event callback
 local function onPlayerCollision(player, e)
 
     if (e.phase == "began") then
@@ -351,15 +356,18 @@ local function onPlayerCollision(player, e)
             audio.play(playerDamageSound);
 
         else if (e.other.type == "coin") then
+            local coin = e.other
             -- player-coin collision
-            e.other:removeSelf()
-            -- each coin has a timer set to destroy it after a certain amount of time. need to cancel that here otherwise it'll
-            -- try and destroy a coin that no longer exists as we've removed it here
-            timer.cancel(coinTimers[e.other.id])
-            table.remove(coinTimers, e.other.id)
+            -- remove the coin
+            coin:removeSelf()
+            -- each coin has a timer set to remove it after a certain amount of time. need to cancel that timer here otherwise it'll
+            -- try and remove a coin that no longer exists as we've already removed it here
+            timer.cancel(coinTimers[coin.id])
+            table.remove(coinTimers, coin.id)
             audio.play(coinSound)
+
             -- add to our money balance if player health and ammo are both full
-            -- only if restorePlayerHealth returns false and inverted to true, meaning health is full, will the and actually check the next part
+            -- only if restorePlayerHealth returns false (inverted to true), meaning health is full, will the and actually check the next part
             -- i.e., only if health is full will ammo restore. then if both are full, the condition is not(false) and not(false) so money added to balance
             if (not(restorePlayerHealth()) and not(restoreAmmo())) then
                 state.money = state.money + 3
@@ -399,8 +407,9 @@ local function fireWeapon(e)
 end
 
 local function removeCoin(e)
-    e.source.params.coin:removeSelf()
-    table.remove(coinTimers, e.source.params.coin.id)
+    local coin = e.source.params.coin
+    coin:removeSelf()
+    table.remove(coinTimers, coin.id)
 end
 
 local function spawnCoins()
@@ -410,8 +419,9 @@ local function spawnCoins()
     coin.fill = coinTexture
     coin.alpha = 0.75
 
+    -- coins disappear after a certain length of time if left uncollected. otherwise would be too easy for player
     local expiryTimer = timer.performWithDelay(math.random(1000, 5000), removeCoin, 1, "coinExpiry")
-    -- pass this coin itself to its deletion timer to allow easily deletion in timer
+    -- pass the coin as a parameter to its deletion timer to allow easily deletion later on
     expiryTimer.params = {coin=coin}
 
     local id = os.time()
@@ -423,7 +433,7 @@ local function spawnCoins()
 
 end
 
-local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
+-- local spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
 
 local function difficultyControl()
     timer.cancel(spawnEnemiesTimer)
@@ -539,6 +549,7 @@ function scene:create( event )
 	local spawnCoinsTimer
 	local updateEnemiesTimer
 	local controlTimer
+    local spawnEnemiesTimer
 end
 
 function scene:show( event )
@@ -566,6 +577,7 @@ function scene:show( event )
 		spawnCoinsTimer = timer.performWithDelay(1000,spawnCoins,0);
 		updateEnemiesTimer = timer.performWithDelay(1000, updateEnemies, 0);
 		controlTimer = timer.performWithDelay(10, control, 0)
+        spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
 	
 		physics.start()
 
