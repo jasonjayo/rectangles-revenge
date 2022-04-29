@@ -1,3 +1,8 @@
+-- 
+-- There are some debug options in this file that I used to give more info on the screen 
+-- to help with fixing bugs. They're all disabled now, but I decided to leave the code in for 
+-- assessment purposes. I've clearly marked the debug code throughout the file with DEBUG
+-- 
 local composer = require("composer")
 local json = require("json")
 local scene = composer.newScene()
@@ -542,7 +547,7 @@ function scene:create( event )
     moneyIndicator:scale(0.1, 0.1)
 
     -- score counter
-    score = display.newText(ui, state.score, 0, 20, native.systemFont, 18)
+    score = display.newText(ui, "", 0, 20, native.systemFont, 18)
 
     -- timers
     local difficultyControlTimer
@@ -550,6 +555,8 @@ function scene:create( event )
 	local updateEnemiesTimer
 	local controlTimer
     local spawnEnemiesTimer
+
+    controlTimer = timer.performWithDelay(10, control, 0)
 end
 
 function scene:show( event )
@@ -576,7 +583,6 @@ function scene:show( event )
 		difficultyControlTimer = timer.performWithDelay(5000, difficultyControl, 0)
 		spawnCoinsTimer = timer.performWithDelay(1000,spawnCoins,0);
 		updateEnemiesTimer = timer.performWithDelay(1000, updateEnemies, 0);
-		controlTimer = timer.performWithDelay(10, control, 0)
         spawnEnemiesTimer = timer.performWithDelay(state.spawnRate, spawnEnemy, 0);
 	
 		physics.start()

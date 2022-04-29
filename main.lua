@@ -1,10 +1,15 @@
+----------------------------------------------
+-- CS4043 Group 17
+-- Comments and code by Jason Gill (21304092)
+----------------------------------------------
+
 local composer = require( "composer" )
 local json = require("json")
 
 -- hide status bar
-display.setStatusBar( display.HiddenStatusBar )
+display.setStatusBar(display.HiddenStatusBar)
 -- seed random num generator
-math.randomseed( os.time() )
+math.randomseed(os.time())
 
 -- weapon properties
 local game = {
@@ -46,6 +51,7 @@ local state = {
     weaponsOwned = {
         "default"
     },
+    -- default weapon
     weapon = game.weapons[1],
     highscore = 0
 }
